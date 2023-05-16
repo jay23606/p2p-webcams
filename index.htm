@@ -57,7 +57,7 @@
 
         const isPeerConnected = (peerId) => videoElements.has(peerId) && _connected;
 
-        media({ video: true, audio: true }).then((stream) => $('local-video', { srcObject: stream })).catch((error) => console.error(error));
+        media({ video: true, audio: true }).then((stream) => $('local-video', { srcObject: stream, muted: true })).catch((error) => console.error(error));
 
         peer.on('open', (id) => {
             dbRef.onDisconnect().remove();
