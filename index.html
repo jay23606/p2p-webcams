@@ -57,6 +57,7 @@
         <button id="stop" disabled>Stop</button>
         <button id="toggle-chat">Chat</button>
         <span id="stat">Click Start to meet a stranger</span>
+        <span id="typing" style="font-size:14px;color:#fd7;font-style:italic;white-space:nowrap;display:none">Stranger is typing…</span>
         <span id="online" style="font-size:14px;color:#6c6;white-space:nowrap">0 online</span>
     </div>
 
@@ -82,7 +83,7 @@
 
         const go = $('go'), stop = $('stop'), msg = $('msg'),
               stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video'),
-              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat');
+              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat'), typing = $('typing');
 
         // live count of everyone currently present (updates for all clients in realtime)
         presence.on('value', (snap) => {
@@ -108,7 +109,7 @@
             pc.oniceconnectionstatechange = () => {
                 const s = pc.iceConnectionState;
                 if (s === 'checking') say('Connecting…');
-                else if (s === 'connected' || s === 'completed') { if (!typingShown) say('Connected — say hi'); }
+                else if (s === 'connected' || s === 'completed') say('Connected — say hi');
                 else if (s === 'disconnected') say('Connection unstable…');
                 else if (s === 'failed') { say('Connection failed'); partnerGone(); }
             };
@@ -122,8 +123,7 @@
         };
         const showTyping = (on) => {
             typingShown = on;
-            if (on) { say('Stranger is typing…'); }
-            else if (partner) { say('Connected — say hi'); }
+            typing.style.display = on ? '' : 'none';
         };
 
         const wireConn = (c) => {
@@ -165,7 +165,7 @@
 
         const cleanupPartner = () => {
             partner = null;
-            typingShown = false; clearTimeout(typingTimer);
+            showTyping(false); clearTimeout(typingTimer);
             remoteVideo.removeAttribute('data-live'); remoteVideo.srcObject = null;
             if (conn) { conn.close(); conn = null; }
             if (call) { call.close(); call = null; }
