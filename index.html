@@ -11,9 +11,9 @@
         body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
         #videos { position: relative; flex: 1; min-height: 0; background: var(--stage); overflow: hidden; }
         /* contain = whole camera frame, never cropped */
-        #remote-video { width: 100%; height: 100%; object-fit: contain; background: var(--stage); }
+        #remote-video { width: 100%; height: 100%; object-fit: contain; }
         #remote-video:not([data-live]) { opacity: .25; }
-        #local-video { position: absolute; top: 12px; right: 12px; width: 22%; max-width: 220px; aspect-ratio: 3/4; object-fit: contain; background: var(--stage); border: 2px solid rgba(128,128,128,.6); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 3; }
+        #local-video { position: absolute; top: 12px; right: 12px; width: 22%; max-width: 220px; aspect-ratio: 3/4; object-fit: cover; border: 2px solid rgba(128,128,128,.6); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 3; }
         @media (max-width: 640px) { #local-video { width: 28%; top: 8px; right: 8px; border-radius: 6px; } }
         #bar { display: flex; gap: 8px; padding: 8px; background: var(--bar); align-items: center; }
         #stat { font-size: 14px; color: #9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
