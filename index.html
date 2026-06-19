@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>slumegle</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #111; color: #eee; font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        #videos { display: flex; flex: 1; min-height: 0; background: #000; }
+        #videos video { width: 50%; object-fit: cover; background: #000; }
+        #remote-video:not([data-live]) { opacity: .25; }
+        #bar { display: flex; gap: 8px; padding: 8px; background: #1a1a1a; align-items: center; }
+        #stat { flex: 1; font-size: 14px; color: #9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        button { background: #2a6; color: #fff; border: 0; padding: 10px 16px; font-size: 15px; border-radius: 6px; cursor: pointer; }
+        button:disabled { background: #444; cursor: default; }
+        #stop { background: #a33; }
+        #chat { display: flex; flex-direction: column; height: 35vh; border-top: 1px solid #333; }
+        #log { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+        #log .me { color: #6cf; } #log .them { color: #fc6; } #log .sys { color: #888; font-style: italic; }
+        #msg { border: 0; border-top: 1px solid #333; background: #1a1a1a; color: #eee; padding: 10px; font-size: 15px; }
+        #msg:disabled { color: #555; }
+    </style>
+</head>
+<body>
+    <div id="videos">
+        <video id="local-video" autoplay muted playsinline></video>
+        <video id="remote-video" autoplay playsinline></video>
+    </div>
+    <div id="bar">
+        <button id="start">Start</button>
+        <button id="next" disabled>Next</button>
+        <button id="stop" disabled>Stop</button>
+        <span id="stat">Click Start to meet a stranger</span>
+    </div>
+    <div id="chat">
+        <div id="log"></div>
+        <input id="msg" placeholder="Say something..." disabled>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.2.9/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.2.9/firebase-database.js"></script>
+    <script>
+        // ---- helpers (same spirit as the inspo repos) ----
+        const $ = (id, props) => { const e = document.getElementById(id); if (props) Object.assign(e, props); return e; };
+        const rand = () => Math.random().toString(36).slice(2);
+        Element.prototype.on = function (e, fn) { this.addEventListener(e, fn); return this; };
+
+        // ---- config / state ----
+        const firebaseConfig = { databaseURL: "https://jabdal-default-rtdb.firebaseio.com" };
+        firebase.initializeApp(firebaseConfig);
+        const lobby = firebase.database().ref('slumegle/lobby');   // waiting strangers
+        const myKey = rand();                                       // our slot in the lobby
+
+        let peer, localStream, call, conn, partner, searching = false;
+
+        const start = $('start'), next = $('next'), stop = $('stop'), msg = $('msg'),
+              stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video');
+
+        const say = (t) => stat.textContent = t;
+        const line = (text, cls) => { const d = document.createElement('div'); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; };
+
+        // ---- media ----
+        const getMedia = () => navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+        // ---- PeerJS wiring (works whether we called or were called) ----
+        const wireCall = (c) => {
+            call = c;
+            c.on('stream', (s) => { remoteVideo.srcObject = s; remoteVideo.dataset.live = '1'; });
+            c.on('close', partnerGone);
+            c.on('error', partnerGone);
+        };
+        const wireConn = (c) => {
+            conn = c;
+            c.on('data', (d) => {
+                if (d === '__next__') return partnerGone();   // partner skipped us
+                line('Stranger: ' + d, 'them');
+            });
+            c.on('open', () => { msg.disabled = false; });
+            c.on('close', partnerGone);
+        };
+
+        const connectTo = (id) => {                 // we are the caller
+            partner = id;
+            wireConn(peer.connect(id, { reliable: true }));
+            wireCall(peer.call(id, localStream));
+            paired();
+        };
+
+        const paired = () => {
+            searching = false;
+            line('You are now chatting with a stranger.', 'sys');
+            say('Connected — say hi');
+            next.disabled = false; stop.disabled = false; msg.disabled = false;
+        };
+
+        const partnerGone = () => {
+            if (!partner) return;
+            line('Stranger has disconnected.', 'sys');
+            cleanupPartner();
+            if (stop.disabled) return;              // we stopped fully
+            search();                               // auto-find someone new
+        };
+
+        const cleanupPartner = () => {
+            partner = null;
+            remoteVideo.removeAttribute('data-live'); remoteVideo.srcObject = null;
+            if (conn) { conn.close(); conn = null; }
+            if (call) { call.close(); call = null; }
+            msg.disabled = true;
+        };
+
+        // ---- matchmaking: grab a waiting stranger, else wait to be grabbed ----
+        const search = () => {
+            searching = true;
+            say('Looking for a stranger...');
+            lobby.once('value').then((snap) => {
+                let pick = null;
+                snap.forEach((child) => { if (!pick && child.val() !== peer.id) pick = child; });
+                if (pick) {
+                    pick.ref.remove();              // claim them
+                    connectTo(pick.val());
+                } else {
+                    lobby.child(myKey).set(peer.id); // advertise self and wait
+                    lobby.child(myKey).onDisconnect().remove();
+                }
+            });
+        };
+
+        // someone claimed us → they will call us; just answer
+        const listen = () => {
+            peer.on('call', (incoming) => {
+                if (partner) return incoming.close();
+                partner = incoming.peer;
+                incoming.answer(localStream);
+                wireCall(incoming);
+                paired();
+            });
+            peer.on('connection', (c) => { if (c.peer === partner || !conn) wireConn(c); });
+        };
+
+        // ---- buttons ----
+        start.on('click', async () => {
+            start.disabled = true;
+            try { localStream = await getMedia(); } catch (e) { say('Camera/mic blocked'); start.disabled = false; return; }
+            localVideo.srcObject = localStream;
+            peer = new Peer();
+            peer.on('open', () => { listen(); search(); });
+            peer.on('error', (e) => say('Peer error: ' + e.type));
+        });
+
+        next.on('click', () => {
+            lobby.child(myKey).remove();
+            if (partner && conn) { try { conn.send('__next__'); } catch (e) {} }
+            cleanupPartner();
+            search();
+        });
+
+        stop.on('click', () => {
+            lobby.child(myKey).remove();
+            cleanupPartner();
+            searching = false;
+            say('Stopped');
+            line('You disconnected.', 'sys');
+            next.disabled = true; stop.disabled = true; start.disabled = false;
+        });
+
+        msg.on('keypress', (e) => {
+            if (e.key !== 'Enter' || !conn || !msg.value) return;
+            conn.send(msg.value);
+            line('You: ' + msg.value, 'me');
+            msg.value = '';
+        });
+
+        // clean up our lobby slot if the tab closes
+        window.addEventListener('beforeunload', () => lobby.child(myKey).remove());
+    </script>
+</body>
+</html>
