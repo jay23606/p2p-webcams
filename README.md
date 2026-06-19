@@ -1,5 +1,3 @@
-# slumegle
-
 **[Try it live](https://raw.githack.com/jay23606/p2p-webcams/main/index.html)**
 
 A minimal Omegle-style random video + text chat. Two strangers who open the same
@@ -42,24 +40,9 @@ Live (via githack): **[raw.githack.com/jay23606/p2p-webcams](https://raw.githack
 To test locally, open it in **two tabs** or two browsers. One waits, the other
 matches it. Each tab needs its own camera/mic permission.
 
-## Config
-
-The demo points at the same public Firebase URL used by p2p-webcams. To run your
-own, replace `databaseURL` in `firebaseConfig` and make the `slumegle` node
-world read/write in your Realtime DB rules:
-
-```json
-{
-  "rules": {
-    "slumegle": { ".read": true, ".write": true }
-  }
-}
-```
-
 ## Limitations / ideas
 
 - **One-to-one only**, by design (classic Omegle). Group mode would mean tracking multiple simultaneous calls, the way p2p-webcams does.
 - **No persistent identity.** PeerJS assigns a fresh random id every page load, so there are no accounts and no stable way to recognize a returning stranger. A blocking feature, for example, could only be session-scoped unless real backend identity is added.
-- **No moderation.** This is a demo. An unmoderated public stranger-video service carries real safety and abuse obligations — think hard about that before pointing it at the open internet.
 - Camera + mic permission is required; denying it just shows a "blocked" status.
 - Autoplay of remote audio relies on the user having clicked Start first (which satisfies the browser's interaction requirement).
