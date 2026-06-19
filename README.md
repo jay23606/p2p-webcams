@@ -57,6 +57,5 @@ world read/write in your Realtime DB rules:
 
 - **One-to-one only**, by design (classic Omegle). Group mode would mean tracking multiple simultaneous calls, the way p2p-webcams does.
 - **No persistent identity.** PeerJS assigns a fresh random id every page load, so there are no accounts and no stable way to recognize a returning stranger. A blocking feature, for example, could only be session-scoped unless real backend identity is added.
-- **No moderation.** This is a demo. An unmoderated public stranger-video service carries real safety and abuse obligations — think hard about that before pointing it at the open internet.
 - Camera + mic permission is required; denying it just shows a "blocked" status.
 - Autoplay of remote audio relies on the user having clicked Start first (which satisfies the browser's interaction requirement).
