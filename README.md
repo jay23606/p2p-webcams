@@ -29,12 +29,6 @@ tiny helper methods, no framework, no build step.
 
 ## Run it
 
-It's a single static file — open `index.html` directly, or serve it:
-
-```
-npx serve .
-```
-
 Live (via githack): **[raw.githack.com/jay23606/p2p-webcams](https://raw.githack.com/jay23606/p2p-webcams/main/index.html)**
 
 To test locally, open it in **two tabs** or two browsers. One waits, the other
