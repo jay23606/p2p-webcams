@@ -1,5 +1,3 @@
-# slumegle
-
 **[Try it live](https://raw.githack.com/jay23606/p2p-webcams/main/index.html)**
 
 A minimal Omegle-style random video + text chat. Two strangers who open the same
