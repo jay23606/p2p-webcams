@@ -77,6 +77,8 @@
         const myKey = rand();                                       // our slot in the lobby
 
         let peer, localStream, call, conn, partner, searching = false, started = false;
+        let searchTimer = null, typingTimer = null, typingShown = false;
+        const MATCH_TIMEOUT = 30000;   // ms before "still looking" nudge
 
         const go = $('go'), stop = $('stop'), msg = $('msg'),
               stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video'),
@@ -100,16 +102,37 @@
         const getMedia = () => navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 
         // ---- PeerJS wiring (works whether we called or were called) ----
+        const watchIce = (c) => {
+            const pc = c.peerConnection;
+            if (!pc) return;
+            pc.oniceconnectionstatechange = () => {
+                const s = pc.iceConnectionState;
+                if (s === 'checking') say('Connecting…');
+                else if (s === 'connected' || s === 'completed') { if (!typingShown) say('Connected — say hi'); }
+                else if (s === 'disconnected') say('Connection unstable…');
+                else if (s === 'failed') { say('Connection failed'); partnerGone(); }
+            };
+        };
         const wireCall = (c) => {
             call = c;
             c.on('stream', (s) => { remoteVideo.srcObject = s; remoteVideo.dataset.live = '1'; });
             c.on('close', partnerGone);
             c.on('error', partnerGone);
+            watchIce(c);
         };
+        const showTyping = (on) => {
+            typingShown = on;
+            if (on) { say('Stranger is typing…'); }
+            else if (partner) { say('Connected — say hi'); }
+        };
+
         const wireConn = (c) => {
             conn = c;
             c.on('data', (d) => {
                 if (d === '__next__') return partnerGone();   // partner skipped us
+                if (d === '__typing__') return showTyping(true);
+                if (d === '__stoptyping__') return showTyping(false);
+                showTyping(false);                            // a real message ends "typing"
                 line('Stranger: ' + d, 'them');
             });
             c.on('open', () => { msg.disabled = false; });
@@ -125,6 +148,7 @@
 
         const paired = () => {
             searching = false;
+            clearTimeout(searchTimer);
             clearLog();
             line('You are now chatting with a stranger.', 'sys');
             say('Connected — say hi');
@@ -141,6 +165,7 @@
 
         const cleanupPartner = () => {
             partner = null;
+            typingShown = false; clearTimeout(typingTimer);
             remoteVideo.removeAttribute('data-live'); remoteVideo.srcObject = null;
             if (conn) { conn.close(); conn = null; }
             if (call) { call.close(); call = null; }
@@ -150,7 +175,8 @@
         // ---- matchmaking: grab a waiting stranger, else wait to be grabbed ----
         const search = () => {
             searching = true;
-            say('Looking for a stranger...');
+            say('Looking for a stranger…');
+            clearTimeout(searchTimer);
             lobby.once('value').then((snap) => {
                 let pick = null;
                 snap.forEach((child) => { if (!pick && child.val() !== peer.id) pick = child; });
@@ -160,6 +186,9 @@
                 } else {
                     lobby.child(myKey).set(peer.id); // advertise self and wait
                     lobby.child(myKey).onDisconnect().remove();
+                    searchTimer = setTimeout(() => {
+                        if (searching) say('Still looking… not many people around right now.');
+                    }, MATCH_TIMEOUT);
                 }
             });
         };
@@ -205,17 +234,34 @@
             lobby.child(myKey).remove();
             cleanupPartner();
             searching = false; started = false;
+            clearTimeout(searchTimer);
             say('Stopped');
             line('You disconnected.', 'sys');
             go.textContent = 'Start'; go.disabled = false; stop.disabled = true;
             presence.child(myKey).remove();
         });
 
+        const sendTyping = () => {
+            if (!conn) return;
+            try { conn.send('__typing__'); } catch (e) {}
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(() => { try { conn && conn.send('__stoptyping__'); } catch (e) {} }, 1500);
+        };
+
         msg.on('keypress', (e) => {
-            if (e.key !== 'Enter' || !conn || !msg.value) return;
+            if (e.key !== 'Enter') return;
+            if (!conn || !msg.value) return;
+            clearTimeout(typingTimer);
+            try { conn.send('__stoptyping__'); } catch (e) {}
             conn.send(msg.value);
             line('You: ' + msg.value, 'me');
             msg.value = '';
+        });
+        msg.on('input', () => { if (msg.value) sendTyping(); });
+
+        // Esc = Next (skip to a new stranger), once started
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && started && !go.disabled) { e.preventDefault(); skip(); }
         });
 
         toggleChat.on('click', () => {

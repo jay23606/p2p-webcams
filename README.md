@@ -1,3 +1,5 @@
+# slumegle
+
 **[Try it live](https://raw.githack.com/jay23606/p2p-webcams/main/index.html)**
 
 A minimal Omegle-style random video + text chat. Two strangers who open the same
@@ -15,6 +17,7 @@ tiny helper methods, no framework, no build step.
 - Live **"N online"** count of everyone currently in the app.
 - Text chat that overlays the video as a translucent panel, **hidden by default** (most people just want video). A **Chat** button toggles it, and it flashes an unread indicator if a message arrives while closed.
 - Chat history clears automatically each time you connect to a new stranger.
+- **Connection status** feedback (connecting / connected / unstable / failed), a **"still looking…"** nudge if no match appears within 30s, **Esc** as a shortcut for Next, and a **"Stranger is typing…"** indicator.
 - Mobile-friendly layout: the stranger's video fills the screen, your own self-view is a small overlay in the corner, and everything reflows on rotation. Video uses `contain`, so the full camera frame is always shown (letterboxed rather than cropped).
 
 ## How it works
@@ -57,5 +60,6 @@ world read/write in your Realtime DB rules:
 
 - **One-to-one only**, by design (classic Omegle). Group mode would mean tracking multiple simultaneous calls, the way p2p-webcams does.
 - **No persistent identity.** PeerJS assigns a fresh random id every page load, so there are no accounts and no stable way to recognize a returning stranger. A blocking feature, for example, could only be session-scoped unless real backend identity is added.
+- **No moderation.** This is a demo. An unmoderated public stranger-video service carries real safety and abuse obligations — think hard about that before pointing it at the open internet.
 - Camera + mic permission is required; denying it just shows a "blocked" status.
 - Autoplay of remote audio relies on the user having clicked Start first (which satisfies the browser's interaction requirement).
