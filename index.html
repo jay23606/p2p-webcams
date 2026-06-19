@@ -6,51 +6,58 @@
     <title>slumegle</title>
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; background: #111; color: #eee; font-family: system-ui, sans-serif; height: 100vh; height: 100dvh; display: flex; flex-direction: column; }
+        body { margin: 0; background: #111; color: #eee; font-family: system-ui, sans-serif; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
         #videos { position: relative; flex: 1; min-height: 0; background: #000; overflow: hidden; }
-        #remote-video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+        /* contain = show the whole camera frame, never crop (letterboxed if ratios differ) */
+        #remote-video { width: 100%; height: 100%; object-fit: contain; background: #000; }
         #remote-video:not([data-live]) { opacity: .25; }
         #local-video {
             position: absolute; top: 12px; right: 12px;
             width: 22%; max-width: 220px; aspect-ratio: 3 / 4;
-            object-fit: cover; background: #000;
+            object-fit: contain; background: #000;
             border: 2px solid rgba(255,255,255,.6); border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 2;
+            box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 3;
         }
-        /* phones: shrink the self-view overlay */
         @media (max-width: 640px) {
-            #local-video { width: 28%; aspect-ratio: 3 / 4; top: 8px; right: 8px; border-radius: 6px; }
+            #local-video { width: 28%; top: 8px; right: 8px; border-radius: 6px; }
         }
         #bar { display: flex; gap: 8px; padding: 8px; background: #1a1a1a; align-items: center; }
         #stat { flex: 1; font-size: 14px; color: #9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         button { background: #2a6; color: #fff; border: 0; padding: 10px 16px; font-size: 15px; border-radius: 6px; cursor: pointer; }
         button:disabled { background: #444; cursor: default; }
         #stop { background: #a33; }
-        #chat { display: flex; flex-direction: column; height: 35vh; max-height: 260px; border-top: 1px solid #333; }
-        /* landscape phones are short: keep chat compact so video fills width */
-        @media (max-height: 480px) {
-            #chat { height: 30vh; max-height: 150px; }
+        #toggle-chat { background: #357; }
+        #toggle-chat.unread { background: #c63; }
+        /* chat overlays the bottom of the video, translucent; hidden by default */
+        #chat {
+            position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+            display: flex; flex-direction: column;
+            height: 40%; max-height: 320px;
+            background: linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,.25));
+            backdrop-filter: blur(2px);
         }
-        #log { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
-        #log .me { color: #6cf; } #log .them { color: #fc6; } #log .sys { color: #888; font-style: italic; }
-        #msg { border: 0; border-top: 1px solid #333; background: #1a1a1a; color: #eee; padding: 10px; font-size: 15px; }
-        #msg:disabled { color: #555; }
+        #chat.hidden { display: none; }
+        #log { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; text-shadow: 0 1px 2px #000; }
+        #log .me { color: #7df; } #log .them { color: #fd7; } #log .sys { color: #bbb; font-style: italic; }
+        #msg { border: 0; background: rgba(20,20,20,.7); color: #eee; padding: 10px; font-size: 15px; border-radius: 6px; margin: 0 8px 8px; }
+        #msg:disabled { color: #777; }
     </style>
 </head>
 <body>
     <div id="videos">
         <video id="remote-video" autoplay playsinline></video>
         <video id="local-video" autoplay muted playsinline></video>
+        <div id="chat" class="hidden">
+            <div id="log"></div>
+            <input id="msg" placeholder="Say something..." disabled>
+        </div>
     </div>
     <div id="bar">
         <button id="go">Start</button>
         <button id="stop" disabled>Stop</button>
+        <button id="toggle-chat">Chat</button>
         <span id="stat">Click Start to meet a stranger</span>
         <span id="online" style="font-size:14px;color:#6c6;white-space:nowrap">0 online</span>
-    </div>
-    <div id="chat">
-        <div id="log"></div>
-        <input id="msg" placeholder="Say something..." disabled>
     </div>
 
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
@@ -73,7 +80,7 @@
 
         const go = $('go'), stop = $('stop'), msg = $('msg'),
               stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video'),
-              online = $('online');
+              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat');
 
         // live count of everyone currently present (updates for all clients in realtime)
         presence.on('value', (snap) => {
@@ -82,7 +89,11 @@
         });
 
         const say = (t) => stat.textContent = t;
-        const line = (text, cls) => { const d = document.createElement('div'); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; };
+        const line = (text, cls) => {
+            const d = document.createElement('div'); d.className = cls; d.textContent = text;
+            log.appendChild(d); log.scrollTop = log.scrollHeight;
+            if (cls === 'them' && chat.classList.contains('hidden')) toggleChat.classList.add('unread');
+        };
         const clearLog = () => log.innerHTML = '';
 
         // ---- media ----
@@ -205,6 +216,12 @@
             conn.send(msg.value);
             line('You: ' + msg.value, 'me');
             msg.value = '';
+        });
+
+        toggleChat.on('click', () => {
+            chat.classList.toggle('hidden');
+            const open = !chat.classList.contains('hidden');
+            if (open) { toggleChat.classList.remove('unread'); if (!msg.disabled) msg.focus(); }
         });
 
         // clean up our lobby slot if the tab closes
