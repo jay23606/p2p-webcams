@@ -28,10 +28,10 @@
         <video id="remote-video" autoplay playsinline></video>
     </div>
     <div id="bar">
-        <button id="start">Start</button>
-        <button id="next" disabled>Next</button>
+        <button id="go">Start</button>
         <button id="stop" disabled>Stop</button>
         <span id="stat">Click Start to meet a stranger</span>
+        <span id="online" style="font-size:14px;color:#6c6;white-space:nowrap">0 online</span>
     </div>
     <div id="chat">
         <div id="log"></div>
@@ -51,15 +51,24 @@
         const firebaseConfig = { databaseURL: "https://jabdal-default-rtdb.firebaseio.com" };
         firebase.initializeApp(firebaseConfig);
         const lobby = firebase.database().ref('slumegle/lobby');   // waiting strangers
+        const presence = firebase.database().ref('slumegle/online'); // everyone currently here
         const myKey = rand();                                       // our slot in the lobby
 
-        let peer, localStream, call, conn, partner, searching = false;
+        let peer, localStream, call, conn, partner, searching = false, started = false;
 
-        const start = $('start'), next = $('next'), stop = $('stop'), msg = $('msg'),
-              stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video');
+        const go = $('go'), stop = $('stop'), msg = $('msg'),
+              stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video'),
+              online = $('online');
+
+        // live count of everyone currently present (updates for all clients in realtime)
+        presence.on('value', (snap) => {
+            const n = snap.numChildren();
+            online.textContent = `${n} online`;
+        });
 
         const say = (t) => stat.textContent = t;
         const line = (text, cls) => { const d = document.createElement('div'); d.className = cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; };
+        const clearLog = () => log.innerHTML = '';
 
         // ---- media ----
         const getMedia = () => navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -90,9 +99,10 @@
 
         const paired = () => {
             searching = false;
+            clearLog();
             line('You are now chatting with a stranger.', 'sys');
             say('Connected — say hi');
-            next.disabled = false; stop.disabled = false; msg.disabled = false;
+            go.textContent = 'Next'; go.disabled = false; stop.disabled = false; msg.disabled = false;
         };
 
         const partnerGone = () => {
@@ -141,29 +151,38 @@
         };
 
         // ---- buttons ----
-        start.on('click', async () => {
-            start.disabled = true;
-            try { localStream = await getMedia(); } catch (e) { say('Camera/mic blocked'); start.disabled = false; return; }
+        const startUp = async () => {
+            go.disabled = true;
+            try { localStream = await getMedia(); } catch (e) { say('Camera/mic blocked'); go.disabled = false; return; }
             localVideo.srcObject = localStream;
+            started = true;
             peer = new Peer();
-            peer.on('open', () => { listen(); search(); });
+            peer.on('open', () => {
+                presence.child(myKey).set(true);
+                presence.child(myKey).onDisconnect().remove();
+                listen(); search();
+                go.textContent = 'Next'; go.disabled = false; stop.disabled = false;
+            });
             peer.on('error', (e) => say('Peer error: ' + e.type));
-        });
+        };
 
-        next.on('click', () => {
+        const skip = () => {
             lobby.child(myKey).remove();
             if (partner && conn) { try { conn.send('__next__'); } catch (e) {} }
             cleanupPartner();
             search();
-        });
+        };
+
+        go.on('click', () => started ? skip() : startUp());
 
         stop.on('click', () => {
             lobby.child(myKey).remove();
             cleanupPartner();
-            searching = false;
+            searching = false; started = false;
             say('Stopped');
             line('You disconnected.', 'sys');
-            next.disabled = true; stop.disabled = true; start.disabled = false;
+            go.textContent = 'Start'; go.disabled = false; stop.disabled = true;
+            presence.child(myKey).remove();
         });
 
         msg.on('keypress', (e) => {
@@ -174,7 +193,7 @@
         });
 
         // clean up our lobby slot if the tab closes
-        window.addEventListener('beforeunload', () => lobby.child(myKey).remove());
+        window.addEventListener('beforeunload', () => { lobby.child(myKey).remove(); presence.child(myKey).remove(); });
     </script>
 </body>
 </html>
