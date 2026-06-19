@@ -22,7 +22,7 @@
             #local-video { width: 28%; top: 8px; right: 8px; border-radius: 6px; }
         }
         #bar { display: flex; gap: 8px; padding: 8px; background: #1a1a1a; align-items: center; }
-        #stat { flex: 1; font-size: 14px; color: #9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #stat { flex: 0 1 auto; font-size: 14px; color: #9ad; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         button { background: #2a6; color: #fff; border: 0; padding: 10px 16px; font-size: 15px; border-radius: 6px; cursor: pointer; }
         button:disabled { background: #444; cursor: default; }
         #stop { background: #a33; }
@@ -56,8 +56,10 @@
         <button id="go">Start</button>
         <button id="stop" disabled>Stop</button>
         <button id="toggle-chat">Chat</button>
-        <span id="stat">Click Start to meet a stranger</span>
-        <span id="typing" style="font-size:14px;color:#fd7;font-style:italic;white-space:nowrap;display:none">Stranger is typing…</span>
+        <span id="status-group" style="flex:1;display:flex;align-items:center;gap:8px;min-width:0">
+            <span id="stat">Click Start to meet a stranger</span>
+            <span id="typing" style="font-size:14px;color:#fd7;font-style:italic;white-space:nowrap;display:none">Stranger is typing…</span>
+        </span>
         <span id="online" style="font-size:14px;color:#6c6;white-space:nowrap">0 online</span>
     </div>
 
