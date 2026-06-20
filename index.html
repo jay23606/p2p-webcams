@@ -13,7 +13,7 @@
         #videos video.big { width: 100%; height: 100%; object-fit: contain; }
         #remote-video:not([data-live]) { opacity: .25; }
         #videos video.pip { position: absolute; top: 12px; right: 12px; width: 22%; max-width: 220px; aspect-ratio: 4/3; object-fit: contain; background: var(--stage); border: 2px solid rgba(128,128,128,.6); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.5); z-index: 3; cursor: pointer; }
-        #controls { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: linear-gradient(to top, rgba(0,0,0,.5), transparent); opacity: 0; transition: opacity .2s; pointer-events: none; }
+        #controls { position: absolute; left: 0; right: 0; top: 0; z-index: 4; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: linear-gradient(to bottom, rgba(0,0,0,.5), transparent); opacity: 0; transition: opacity .2s; pointer-events: none; }
         #videos:hover #controls { opacity: 1; pointer-events: auto; }
         #vol { width: 130px; accent-color: #c9a6ff; cursor: pointer; }
         @media (hover: none) { #controls { opacity: 1; pointer-events: auto; } }
@@ -54,6 +54,7 @@
         <span id="stat" style="flex:1;min-width:0">Click Start to meet a stranger</span>
         <span id="typing" style="font-size:14px;color:#fd7;font-style:italic;white-space:nowrap;text-align:center;display:none">Stranger is typing…</span>
         <span style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px">
+            <span id="country" style="font-size:14px;color:#9ad;white-space:nowrap"></span>
             <span id="online" style="font-size:14px;color:#6c6;white-space:nowrap">0 online</span>
             <button id="theme" style="padding:10px 12px;background:#555">🌙</button>
         </span>
@@ -81,7 +82,7 @@
 
         const go = $('go'), stop = $('stop'), msg = $('msg'),
               stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video'),
-              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat'), typing = $('typing'), share = $('share');
+              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat'), typing = $('typing'), share = $('share'), country = $('country');
 
         const leaveLobby = () => lobby.child(myKey).remove();
         const leave = () => { leaveLobby(); presence.child(myKey).remove(); };
@@ -110,6 +111,7 @@
                 if (j.country_code && j.country_name) myCountry = flag(j.country_code) + ' ' + j.country_name;
             } catch (e) {}
         };
+        fetchCountry();   // start immediately at load
 
         // ---- media ----
         const getMedia = () => navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -144,7 +146,7 @@
                 if (d === '__next__') return partnerGone();
                 if (d === '__typing__') return showTyping(true);
                 if (d === '__stoptyping__') return showTyping(false);
-                if (d.startsWith && d.startsWith('__country__')) return line('Stranger is from ' + d.slice(11), 'sys');
+                if (d.startsWith && d.startsWith('__country__')) { const c = d.slice(11); country.textContent = c; return line('Stranger is from ' + c, 'sys'); }
                 showTyping(false);
                 line('Stranger: ' + d, 'them');
             });
@@ -180,6 +182,7 @@
 
         const cleanupPartner = () => {
             partner = null;
+            country.textContent = '';
             showTyping(false); clearTimeout(typingTimer);
             if (screenStream) stopShare();
             share.disabled = true;
@@ -228,7 +231,6 @@
             try { localStream = await getMedia(); } catch (e) { say('Camera/mic blocked'); go.disabled = false; return; }
             localVideo.srcObject = localStream;
             started = true;
-            fetchCountry();                          // non-blocking; ready before most pairings
             peer = new Peer();
             peer.on('open', () => {
                 presence.child(myKey).set(true);
