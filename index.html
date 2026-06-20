@@ -102,11 +102,10 @@
         const clearLog = () => log.innerHTML = '';
         const send = (d) => { try { conn && conn.send(d); } catch (e) {} };
 
-        // fetch our own country once (city/region deliberately not used).
-        // tries multiple CORS-friendly providers; logs so failures are debuggable.
+        // fetch our own country once (city/region deliberately not used); tries providers in order
         const flag = (cc) => cc.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt()));
         const providers = [
-            { url: 'https://ipwho.is/', pick: j => j.success !== false && j.country_code && { code: j.country_code, name: j.country } },
+            { url: 'https://ipwho.is/', pick: j => j.country_code && { code: j.country_code, name: j.country } },
             { url: 'https://ipapi.co/json/', pick: j => j.country_code && { code: j.country_code, name: j.country_name } },
             { url: 'https://get.geojs.io/v1/ip/country.json', pick: j => j.country && { code: j.country, name: j.name || j.country } }
         ];
@@ -114,14 +113,12 @@
             for (const p of providers) {
                 try {
                     const r = await fetch(p.url);
-                    if (!r.ok) { console.warn('country: ' + p.url + ' → ' + r.status); continue; }
-                    const got = p.pick(await r.json());
-                    if (got) { myCountry = flag(got.code) + ' ' + got.name; console.log('country resolved:', myCountry); if (!partner) country.textContent = 'You: ' + myCountry; return; }
-                } catch (e) { console.warn('country fetch failed:', p.url, e.message); }
+                    const got = r.ok && p.pick(await r.json());
+                    if (got) { myCountry = flag(got.code) + ' ' + got.name; if (!partner) country.textContent = 'You: ' + myCountry; return; }
+                } catch (e) {}
             }
-            console.warn('country: all providers failed');
         };
-        fetchCountry();   // start immediately at load
+        fetchCountry();
 
         // ---- media ----
         const getMedia = () => navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -166,7 +163,7 @@
 
         const connectTo = (id) => {                 // we are the caller
             partner = id;
-            wireConn(peer.connect(id, { reliable: true }));
+            wireConn(peer.connect(id, { reliable: true, serialization: 'json' }));
             wireCall(peer.call(id, localStream));
             paired();
         };
