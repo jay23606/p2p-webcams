@@ -109,12 +109,18 @@
             { url: 'https://ipapi.co/json/', pick: j => j.country_code && { code: j.country_code, name: j.country_name } },
             { url: 'https://get.geojs.io/v1/ip/country.json', pick: j => j.country && { code: j.country, name: j.name || j.country } }
         ];
+        const sendCountry = () => { if (myCountry && conn) send('__country__' + myCountry); };
         const fetchCountry = async () => {
             for (const p of providers) {
                 try {
                     const r = await fetch(p.url);
                     const got = r.ok && p.pick(await r.json());
-                    if (got) { myCountry = flag(got.code) + ' ' + got.name; if (!partner) country.textContent = 'You: ' + myCountry; return; }
+                    if (got) {
+                        myCountry = flag(got.code) + ' ' + got.name;
+                        if (!partner) country.textContent = 'You: ' + myCountry;
+                        sendCountry();   // in case we connected before the fetch finished
+                        return;
+                    }
                 } catch (e) {}
             }
         };
@@ -153,11 +159,11 @@
                 if (d === '__next__') return partnerGone();
                 if (d === '__typing__') return showTyping(true);
                 if (d === '__stoptyping__') return showTyping(false);
-                if (d.startsWith && d.startsWith('__country__')) { const c = d.slice(11); country.textContent = c; return line('Stranger is from ' + c, 'sys'); }
+                if (d.startsWith && d.startsWith('__country__')) { const cn = d.slice(11); country.textContent = cn; return line('Stranger is from ' + cn, 'sys'); }
                 showTyping(false);
                 line('Stranger: ' + d, 'them');
             });
-            c.on('open', () => { msg.disabled = false; if (myCountry) c.send('__country__' + myCountry); });
+            c.on('open', () => { msg.disabled = false; sendCountry(); });
             c.on('close', partnerGone);
         };
 
