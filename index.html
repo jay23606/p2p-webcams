@@ -75,13 +75,16 @@
         const presence = firebase.database().ref('slumegle/online'); // everyone currently here
         const myKey = rand();                                       // our slot in the lobby
 
-        let peer, localStream, call, conn, partner, searching = false, started = false, screenStream = null;
+        let peer, localStream, call, conn, partner, searching = false, started = false, screenStream = null, myCountry = '';
         let searchTimer = null, typingTimer = null, typingShown = false;
         const MATCH_TIMEOUT = 30000;   // ms before "still looking" nudge
 
         const go = $('go'), stop = $('stop'), msg = $('msg'),
               stat = $('stat'), log = $('log'), localVideo = $('local-video'), remoteVideo = $('remote-video'),
-              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat'), typing = $('typing');
+              online = $('online'), chat = $('chat'), toggleChat = $('toggle-chat'), typing = $('typing'), share = $('share');
+
+        const leaveLobby = () => lobby.child(myKey).remove();
+        const leave = () => { leaveLobby(); presence.child(myKey).remove(); };
 
         // live count of everyone currently present (updates for all clients in realtime)
         presence.on('value', (snap) => {
@@ -97,6 +100,16 @@
         };
         const clearLog = () => log.innerHTML = '';
         const send = (d) => { try { conn && conn.send(d); } catch (e) {} };
+
+        // fetch our own country once (city/region deliberately not used)
+        const flag = (cc) => cc.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt()));
+        const fetchCountry = async () => {
+            try {
+                const r = await fetch('https://ipapi.co/json/');
+                const j = await r.json();
+                if (j.country_code && j.country_name) myCountry = flag(j.country_code) + ' ' + j.country_name;
+            } catch (e) {}
+        };
 
         // ---- media ----
         const getMedia = () => navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -131,10 +144,11 @@
                 if (d === '__next__') return partnerGone();
                 if (d === '__typing__') return showTyping(true);
                 if (d === '__stoptyping__') return showTyping(false);
+                if (d.startsWith && d.startsWith('__country__')) return line('Stranger is from ' + d.slice(11), 'sys');
                 showTyping(false);
                 line('Stranger: ' + d, 'them');
             });
-            c.on('open', () => { msg.disabled = false; });
+            c.on('open', () => { msg.disabled = false; if (myCountry) c.send('__country__' + myCountry); });
             c.on('close', partnerGone);
         };
 
@@ -153,7 +167,7 @@
             line('You are now chatting with a stranger.', 'sys');
             say('Connected');
             go.textContent = 'Next'; go.disabled = false; stop.disabled = false; msg.disabled = false;
-            $('share').disabled = false;
+            share.disabled = false;
         };
 
         const partnerGone = () => {
@@ -168,7 +182,7 @@
             partner = null;
             showTyping(false); clearTimeout(typingTimer);
             if (screenStream) stopShare();
-            $('share').disabled = true;
+            share.disabled = true;
             remoteVideo.removeAttribute('data-live'); remoteVideo.srcObject = null;
             if (conn) { conn.close(); conn = null; }
             if (call) { call.close(); call = null; }
@@ -214,6 +228,7 @@
             try { localStream = await getMedia(); } catch (e) { say('Camera/mic blocked'); go.disabled = false; return; }
             localVideo.srcObject = localStream;
             started = true;
+            fetchCountry();                          // non-blocking; ready before most pairings
             peer = new Peer();
             peer.on('open', () => {
                 presence.child(myKey).set(true);
@@ -225,7 +240,7 @@
         };
 
         const skip = () => {
-            lobby.child(myKey).remove();
+            leaveLobby();
             if (partner) send('__next__');
             cleanupPartner();
             search();
@@ -234,14 +249,13 @@
         go.on('click', () => started ? skip() : startUp());
 
         stop.on('click', () => {
-            lobby.child(myKey).remove();
+            leave();
             cleanupPartner();
             searching = false; started = false;
             clearTimeout(searchTimer);
             say('Stopped');
             line('You disconnected.', 'sys');
             go.textContent = 'Start'; go.disabled = false; stop.disabled = true;
-            presence.child(myKey).remove();
         });
 
         const sendTyping = () => {
@@ -286,9 +300,9 @@
             const cam = localStream.getVideoTracks()[0];
             setVideoTrack(cam);
             localVideo.srcObject = localStream;
-            $('share').textContent = 'Share'; $('share').style.background = '#736';
+            share.textContent = 'Share'; share.style.background = '#736';
         };
-        $('share').on('click', async () => {
+        share.on('click', async () => {
             if (screenStream) return stopShare();
             try { screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true }); }
             catch (e) { return; }                       // user cancelled the picker
@@ -296,7 +310,7 @@
             track.onended = stopShare;                   // native "Stop sharing" button
             setVideoTrack(track);
             localVideo.srcObject = screenStream;         // preview your own share
-            $('share').textContent = 'Stop Share'; $('share').style.background = '#a33';
+            share.textContent = 'Stop Share'; share.style.background = '#a33';
         });
 
         $('vol').on('input', (e) => { remoteVideo.volume = e.target.value; });
@@ -313,7 +327,7 @@
         });
 
         // clean up our lobby slot if the tab closes
-        window.addEventListener('beforeunload', () => { lobby.child(myKey).remove(); presence.child(myKey).remove(); });
+        window.addEventListener('beforeunload', leave);
     </script>
 </body>
 </html>
