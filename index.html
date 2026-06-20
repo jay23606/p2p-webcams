@@ -102,14 +102,24 @@
         const clearLog = () => log.innerHTML = '';
         const send = (d) => { try { conn && conn.send(d); } catch (e) {} };
 
-        // fetch our own country once (city/region deliberately not used)
+        // fetch our own country once (city/region deliberately not used).
+        // tries multiple CORS-friendly providers; logs so failures are debuggable.
         const flag = (cc) => cc.toUpperCase().replace(/./g, c => String.fromCodePoint(127397 + c.charCodeAt()));
+        const providers = [
+            { url: 'https://ipwho.is/', pick: j => j.success !== false && j.country_code && { code: j.country_code, name: j.country } },
+            { url: 'https://ipapi.co/json/', pick: j => j.country_code && { code: j.country_code, name: j.country_name } },
+            { url: 'https://get.geojs.io/v1/ip/country.json', pick: j => j.country && { code: j.country, name: j.name || j.country } }
+        ];
         const fetchCountry = async () => {
-            try {
-                const r = await fetch('https://ipapi.co/json/');
-                const j = await r.json();
-                if (j.country_code && j.country_name) myCountry = flag(j.country_code) + ' ' + j.country_name;
-            } catch (e) {}
+            for (const p of providers) {
+                try {
+                    const r = await fetch(p.url);
+                    if (!r.ok) { console.warn('country: ' + p.url + ' → ' + r.status); continue; }
+                    const got = p.pick(await r.json());
+                    if (got) { myCountry = flag(got.code) + ' ' + got.name; console.log('country resolved:', myCountry); if (!partner) country.textContent = 'You: ' + myCountry; return; }
+                } catch (e) { console.warn('country fetch failed:', p.url, e.message); }
+            }
+            console.warn('country: all providers failed');
         };
         fetchCountry();   // start immediately at load
 
@@ -166,6 +176,7 @@
             clearTimeout(searchTimer);
             clearLog();
             remoteVideo.className = 'big'; localVideo.className = 'pip';   // reset swap
+            country.textContent = '';   // clears "You: ..."; stranger's country fills in on data
             line('You are now chatting with a stranger.', 'sys');
             say('Connected');
             go.textContent = 'Next'; go.disabled = false; stop.disabled = false; msg.disabled = false;
