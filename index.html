@@ -4,6 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>slumegle</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#111111">
+    <link rel="icon" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <style>
         * { box-sizing: border-box; }
         :root { --bg: #111; --fg: #eee; --bar: #1a1a1a; --stage: #000; --muted: #9ad; }
@@ -344,6 +350,8 @@
 
         // clean up our lobby slot if the tab closes
         window.addEventListener('beforeunload', leave);
+
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
     </script>
 </body>
 </html>
