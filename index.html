@@ -50,6 +50,7 @@
         <button id="go">Start</button>
         <button id="stop" disabled>Stop</button>
         <button id="toggle-chat">Chat</button>
+        <button id="share" disabled style="background:#736">Share</button>
         <span id="stat" style="flex:1;min-width:0">Click Start to meet a stranger</span>
         <span id="typing" style="font-size:14px;color:#fd7;font-style:italic;white-space:nowrap;text-align:center;display:none">Stranger is typing…</span>
         <span style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:8px">
@@ -74,7 +75,7 @@
         const presence = firebase.database().ref('slumegle/online'); // everyone currently here
         const myKey = rand();                                       // our slot in the lobby
 
-        let peer, localStream, call, conn, partner, searching = false, started = false;
+        let peer, localStream, call, conn, partner, searching = false, started = false, screenStream = null;
         let searchTimer = null, typingTimer = null, typingShown = false;
         const MATCH_TIMEOUT = 30000;   // ms before "still looking" nudge
 
@@ -152,6 +153,7 @@
             line('You are now chatting with a stranger.', 'sys');
             say('Connected');
             go.textContent = 'Next'; go.disabled = false; stop.disabled = false; msg.disabled = false;
+            $('share').disabled = false;
         };
 
         const partnerGone = () => {
@@ -165,6 +167,8 @@
         const cleanupPartner = () => {
             partner = null;
             showTyping(false); clearTimeout(typingTimer);
+            if (screenStream) stopShare();
+            $('share').disabled = true;
             remoteVideo.removeAttribute('data-live'); remoteVideo.srcObject = null;
             if (conn) { conn.close(); conn = null; }
             if (call) { call.close(); call = null; }
@@ -268,6 +272,32 @@
         };
         localVideo.on('click', swapVideos);
         remoteVideo.on('click', swapVideos);
+
+        // ---- screen share: swap the outgoing video track without renegotiating ----
+        const setVideoTrack = (track) => {
+            if (!call || !call.peerConnection) return;
+            const sender = call.peerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(track);
+        };
+        const stopShare = () => {
+            if (!screenStream) return;
+            screenStream.getTracks().forEach(t => t.stop());
+            screenStream = null;
+            const cam = localStream.getVideoTracks()[0];
+            setVideoTrack(cam);
+            localVideo.srcObject = localStream;
+            $('share').textContent = 'Share'; $('share').style.background = '#736';
+        };
+        $('share').on('click', async () => {
+            if (screenStream) return stopShare();
+            try { screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true }); }
+            catch (e) { return; }                       // user cancelled the picker
+            const track = screenStream.getVideoTracks()[0];
+            track.onended = stopShare;                   // native "Stop sharing" button
+            setVideoTrack(track);
+            localVideo.srcObject = screenStream;         // preview your own share
+            $('share').textContent = 'Stop Share'; $('share').style.background = '#a33';
+        });
 
         $('vol').on('input', (e) => { remoteVideo.volume = e.target.value; });
 
